@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Drop Packet Checker</title>
+  </head>
+  <body>
+    <input type="text" id="Rssi" placeholder="Max RSSI Filter" required />
+    <button id="startButton" onclick="startPolling()">Start Polling</button>
+    <button id="stopButton" onclick="stopPolling()" disabled>Stop Polling</button>
+    <h2>Result</h2>
+    <ul id="results"></ul>
+
+    <script>
+      let pollingInterval = null;
+
+      async function fetchData() {
+        const maxRssi = document.getElementById("Rssi").value;
+        if (!maxRssi) {
+          alert("Please enter a max RSSI value.");
+          return;
+        }
+
+        try {
+          const response = await fetch(`/filter-tags?maxRssi=${encodeURIComponent(maxRssi)}`);
+          if (!response.ok) {
+            throw new Error(`Error: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          const results = document.getElementById("results");
+          results.innerHTML = ""; // Clear previous results
+
+          if (data.length === 0) {
+            results.innerHTML = "<li>No tags found within the specified criteria.</li>";
+          } else {
+            data.forEach(tag => {
+              const li = document.createElement("li");
+              li.textContent = `Tag ID: ${tag.tagId}, RSSI: ${tag.rssi}, Last Packet At: ${new Date(tag.lastPacketAt).toLocaleString()}`;
+              results.appendChild(li);
+            });
+          }
+        } catch (error) {
+          alert("Error fetching data: " + error.message);
+        }
+      }
+
+      function startPolling() {
+        const maxRssi = document.getElementById("Rssi").value;
+        if (!maxRssi) {
+          alert("Please enter a max RSSI value.");
+          return;
+        }
+
+        // Disable the start button and enable the stop button
+        document.getElementById("startButton").disabled = true;
+        document.getElementById("stopButton").disabled = false;
+
+        // Start polling every 5 seconds
+        pollingInterval = setInterval(fetchData, 5000);
+      }
+
+      function stopPolling() {
+        // Stop the polling
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          pollingInterval = null;
+        }
+
+        // Enable the start button and disable the stop button
+        document.getElementById("startButton").disabled = false;
+        document.getElementById("stopButton").disabled = true;
+      }
+    </script>
+  </body>
+</html>
