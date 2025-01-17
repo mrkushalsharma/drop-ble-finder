@@ -3,14 +3,26 @@ const dgram = require("dgram"),
     app = express(),
     socket = dgram.createSocket('udp4'),
     config = require('./config'),
-    mongoose = require('./dbConnection'),
-    protocol = require("./protocol"),
-    Tag = require('./model/Tag');
+    protocol = require("./protocol");
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static('public'));
 
+const DATABASE_PATH = path.join(__dirname, "database.json");
+
+function readDatabase() {
+    if (!fs.existsSync(DATABASE_PATH)) {
+        fs.writeFileSync(DATABASE_PATH, JSON.stringify([])); // Create file if it doesn't exist
+    }
+    const data = fs.readFileSync(DATABASE_PATH, "utf-8");
+    return JSON.parse(data);
+}
+
+// Helper function to write data to the file
+function writeDatabase(data) {
+    fs.writeFileSync(DATABASE_PATH, JSON.stringify(data, null, 2)); // Pretty print JSON
+}
 
 socket.on('listening', () => {
     const addr = socket.address();
@@ -21,64 +33,80 @@ socket.on('error', (err) => {
     console.error(`UDP Error: ${err.stack}`);
 });
 
-socket.on('message', async(msg, rinfo) => {
-    const parsed = protocol.parseMessage(msg, rinfo);
-    if (parsed.tagAddress.startsWith('2034')) {
-        const payload = {
-            apMac: parsed.address,
-            tagId: parsed.tagAddress,
-            rssi: parsed.rssi,
-            lastPacketAt: new Date(),
-            createdAt: new Date()
-        };
-        await Tag.findOneAndUpdate(
-            { tagId: payload.tagId }, // Match based on tagId
-            {
-                $set: {
-                    apMac: payload.apMac,
-                    rssi: payload.rssi,
-                    lastPacketAt: payload.lastPacketAt,
-                },
-                $setOnInsert: {
-                    createdAt: payload.createdAt,
-                },
-            },
-            { upsert: true, new: true } // Create if not exists, return updated document
-        );
+socket.on('message', async (msg, rinfo) => {
+    try {
+        // Parse incoming message
+        const parsed = protocol.parseMessage(msg, rinfo);
+
+        // Filter by tag address
+        if (parsed.tagAddress.startsWith("2034")) {
+            const payload = {
+                tagId: parsed.tagAddress,
+                apMac: parsed.address,
+                rssi: parsed.rssi,
+            };
+
+            // Read current database
+            const database = readDatabase();
+            const currentTime = new Date();
+
+            // Check if tag exists
+            const existingTag = database.find((tag) => tag.tagId === payload.tagId);
+
+            if (existingTag) {
+                // Update existing tag
+                existingTag.apMac = payload.apMac;
+                existingTag.rssi = payload.rssi;
+                existingTag.lastPacketAt = currentTime.toISOString();
+            } else {
+                // Add new tag
+                database.push({
+                    ...payload,
+                    lastPacketAt: currentTime.toISOString(),
+                    createdAt: currentTime.toISOString(),
+                });
+            }
+
+            // Write updated database
+            writeDatabase(database);
+
+            console.log(`Tag saved/updated: ${JSON.stringify(payload)}`);
+        }
+    } catch (error) {
+        console.error("Error handling UDP message:", error);
     }
 });
 
 socket.bind(config.UDP_PORT);
 
 
-app.get('/filter-tags', async (req, res) => {
+app.get("/filter-tags", (req, res) => {
     try {
-        const { maxRssi } = req.query; // Get max RSSI filter from query params
-
-        if (!maxRssi) {
-            return res.status(400).json({ error: "maxRssi query parameter is required" });
-        }
-
-        const maxRssiValue = parseFloat(maxRssi); // Convert maxRssi to a number
-        if (isNaN(maxRssiValue)) {
-            return res.status(400).json({ error: "maxRssi must be a valid number" });
-        }
-
-        // Calculate the timestamp for 1 minute ago
-        const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-
-        // Query the database
-        const tags = await Tag.find({
-            lastPacketAt: { $gte: oneMinuteAgo }, // Records from the last 1 minute
-            rssi: { $lte: maxRssiValue }         // RSSI less than or equal to maxRssi
-        });
-
-        res.status(200).json(tags);
+      const { maxRssi } = req.query;
+  
+      if (!maxRssi) {
+        return res.status(400).json({ error: "maxRssi query parameter is required" });
+      }
+  
+      const maxRssiValue = parseFloat(maxRssi);
+      if (isNaN(maxRssiValue)) {
+        return res.status(400).json({ error: "maxRssi must be a valid number" });
+      }
+  
+      const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+      const database = readDatabase();
+  
+      // Filter data
+      const filteredTags = database.filter(
+        (tag) => new Date(tag.lastPacketAt) >= oneMinuteAgo && parseFloat(tag.rssi) <= maxRssiValue
+      );
+  
+      res.status(200).json(filteredTags);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "An error occurred while filtering tags" });
+      console.error(error);
+      res.status(500).json({ error: "Failed to filter tags" });
     }
-});
+  });
 
 app.listen(config.PORT, () => {
     console.log(`Server running at http://localhost:${config.PORT}`);
