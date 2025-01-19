@@ -3,75 +3,105 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Drop Packet Checker</title>
+    <title>Data Filter Viewer</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        display: flex;
+        justify-content: space-between;
+        width: 80%;
+        margin-top: 20px;
+      }
+      .panel {
+        width: 45%;
+        border: 1px solid #ccc;
+        padding: 10px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      .panel h2 {
+        margin: 0 0 10px 0;
+        text-align: center;
+      }
+      button {
+        margin: 10px;
+      }
+    </style>
   </head>
   <body>
-    <input type="text" id="Rssi" placeholder="Max RSSI Filter" required />
-    <button id="startButton" onclick="startPolling()">Start Polling</button>
-    <button id="stopButton" onclick="stopPolling()" disabled>Stop Polling</button>
-    <h2>Result</h2>
-    <ul id="results"></ul>
+    <h1>Data Filter Viewer</h1>
+    <input type="number" id="filter-seconds" placeholder="Seconds (e.g., 60)" />
+    <input type="number" id="filter-rssi" placeholder="Max RSSI (e.g., -70)" />
+    <button id="filter-button">Filter</button>
+    <button id="clear-button">Clear All Records</button>
+
+    <div class="container">
+      <div class="panel" id="filtered-panel">
+        <h2>Filtered Data</h2>
+        <ul id="filtered-data"></ul>
+      </div>
+      <div class="panel" id="all-panel">
+        <h2>All Data</h2>
+        <ul id="all-data"></ul>
+      </div>
+    </div>
 
     <script>
-      let pollingInterval = null;
+      const filterButton = document.getElementById("filter-button");
+      const clearButton = document.getElementById("clear-button");
+      const filterSecondsInput = document.getElementById("filter-seconds");
+      const filterRssiInput = document.getElementById("filter-rssi");
+      const filteredDataList = document.getElementById("filtered-data");
+      const allDataList = document.getElementById("all-data");
 
-      async function fetchData() {
-        const maxRssi = document.getElementById("Rssi").value;
-        if (!maxRssi) {
-          alert("Please enter a max RSSI value.");
-          return;
-        }
-
+      const fetchData = async (seconds, maxRssi) => {
         try {
-          const response = await fetch(`/filter-tags?maxRssi=${encodeURIComponent(maxRssi)}`);
-          if (!response.ok) {
-            throw new Error(`Error: ${response.statusText}`);
-          }
-
+          const response = await fetch(
+            `/filter-tags?seconds=${seconds}&maxRssi=${maxRssi}`
+          );
           const data = await response.json();
-          const results = document.getElementById("results");
-          results.innerHTML = ""; // Clear previous results
-
-          if (data.length === 0) {
-            results.innerHTML = "<li>No tags found within the specified criteria.</li>";
-          } else {
-            data.forEach(tag => {
-              const li = document.createElement("li");
-              li.textContent = `Tag ID: ${tag.tagId}, RSSI: ${tag.rssi}, Last Packet At: ${new Date(tag.lastPacketAt).toLocaleString()}`;
-              results.appendChild(li);
-            });
-          }
+          renderData(data.filtered, filteredDataList);
+          renderData(data.all, allDataList);
         } catch (error) {
-          alert("Error fetching data: " + error.message);
+          console.error("Error fetching data:", error);
         }
-      }
+      };
 
-      function startPolling() {
-        const maxRssi = document.getElementById("Rssi").value;
-        if (!maxRssi) {
-          alert("Please enter a max RSSI value.");
-          return;
+      const renderData = (data, element) => {
+        element.innerHTML = data
+          .map(
+            (record) =>
+              `<li>TagId: ${record.tagId}, RSSI: ${record.rssi}, Last Packet: ${record.lastPacketAt}</li>`
+          )
+          .join("");
+      };
+
+      const clearRecords = async () => {
+        try {
+          await fetch("/clear-records", { method: "DELETE" });
+          filteredDataList.innerHTML = "";
+          allDataList.innerHTML = "";
+        } catch (error) {
+          console.error("Error clearing records:", error);
         }
+      };
 
-        // Disable the start button and enable the stop button
-        document.getElementById("startButton").disabled = true;
-        document.getElementById("stopButton").disabled = false;
+      filterButton.addEventListener("click", () => {
+        const seconds = filterSecondsInput.value || 60;
+        const maxRssi = filterRssiInput.value || -100; // Default to a low RSSI limit
+        fetchData(seconds, maxRssi);
+      });
 
-        // Start polling every 5 seconds
-        pollingInterval = setInterval(fetchData, 5000);
-      }
+      clearButton.addEventListener("click", clearRecords);
 
-      function stopPolling() {
-        // Stop the polling
-        if (pollingInterval) {
-          clearInterval(pollingInterval);
-          pollingInterval = null;
-        }
-
-        // Enable the start button and disable the stop button
-        document.getElementById("startButton").disabled = false;
-        document.getElementById("stopButton").disabled = true;
-      }
+      // Initial fetch to populate data
+      fetchData(60, -100);
     </script>
   </body>
 </html>

@@ -82,33 +82,31 @@ socket.on('message', async (msg, rinfo) => {
 socket.bind(config.UDP_PORT);
 
 
+// Endpoint to get filtered data
 app.get("/filter-tags", (req, res) => {
-    try {
-      const { maxRssi } = req.query;
-  
-      if (!maxRssi) {
-        return res.status(400).json({ error: "maxRssi query parameter is required" });
-      }
-  
-      const maxRssiValue = parseFloat(maxRssi);
-      if (isNaN(maxRssiValue)) {
-        return res.status(400).json({ error: "maxRssi must be a valid number" });
-      }
-  
-      const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-      const database = readDatabase();
-  
-      // Filter data
-      const filteredTags = database.filter(
-        (tag) => new Date(tag.lastPacketAt) >= oneMinuteAgo && parseFloat(tag.rssi) <= maxRssiValue
-      );
-  
-      res.status(200).json(filteredTags);
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to filter tags" });
-    }
-  });
+    const { seconds, maxRssi } = req.query;
+    const timeLimit = seconds ? parseInt(seconds, 10) : 60; // Default to last 60 seconds
+    const maxRssiLimit = maxRssi ? parseFloat(maxRssi) : Infinity; // Default to no RSSI limit
+    const currentTime = Date.now();
+    const database = readDatabase();
+
+    const filteredData = database.filter((record) => {
+        const recordTime = new Date(record.lastPacketAt).getTime();
+        return (
+            currentTime - recordTime <= timeLimit * 1000 &&
+            parseFloat(record.rssi) <= maxRssiLimit
+        );
+    });
+
+    res.json({ filtered: filteredData, all: database });
+});
+
+// Endpoint to clear all records
+app.delete("/clear-records", (req, res) => {
+    writeDatabase([]);
+    res.json({ message: "All records cleared." });
+});
+
 
 app.listen(config.PORT, () => {
     console.log(`Server running at http://localhost:${config.PORT}`);
