@@ -85,21 +85,24 @@ socket.bind(config.UDP_PORT);
 // Endpoint to get filtered data
 app.get("/filter-tags", (req, res) => {
     const { seconds, maxRssi } = req.query;
-    const timeLimit = seconds ? parseInt(seconds, 10) : 60; // Default to last 60 seconds
-    const maxRssiLimit = maxRssi ? parseFloat(maxRssi) : Infinity; // Default to no RSSI limit
+  
+    // Parse query parameters
+    const timeLimit = seconds ? parseInt(seconds, 10) : 60; // Default: 60 seconds
+    const maxRssiLimit = maxRssi ? parseFloat(maxRssi) : -Infinity; // Default: No limit (minimum RSSI)
+  
     const currentTime = Date.now();
     const database = readDatabase();
-
+  
+    // Apply filters
     const filteredData = database.filter((record) => {
-        const recordTime = new Date(record.lastPacketAt).getTime();
-        return (
-            currentTime - recordTime <= timeLimit * 1000 &&
-            parseFloat(record.rssi) <= maxRssiLimit
-        );
+      const recordTime = new Date(record.lastPacketAt).getTime();
+      const withinTimeLimit = currentTime - recordTime <= timeLimit * 1000;
+      const withinRssiLimit = parseFloat(record.rssi) >= maxRssiLimit; // RSSI closer to 0 is stronger
+      return withinTimeLimit && withinRssiLimit;
     });
-
+  
     res.json({ filtered: filteredData, all: database });
-});
+  });
 
 // Endpoint to clear all records
 app.delete("/clear-records", (req, res) => {
