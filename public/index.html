@@ -1,107 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Data Filter Viewer</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        margin: 0;
-        padding: 0;
-      }
-      .container {
-        display: flex;
-        justify-content: space-between;
-        width: 80%;
-        margin-top: 20px;
-      }
-      .panel {
-        width: 45%;
-        border: 1px solid #ccc;
-        padding: 10px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      }
-      .panel h2 {
-        margin: 0 0 10px 0;
-        text-align: center;
-      }
-      button {
-        margin: 10px;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>Data Filter Viewer</h1>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Filter Viewer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin-top: 20px;
+    }
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 20px 0;
+    }
+    .controls input {
+      margin: 5px;
+      padding: 10px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 200px;
+    }
+    .controls button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    .controls button:hover {
+      background-color: #0056b3;
+    }
+    .container {
+      display: flex;
+      justify-content: space-between;
+      width: 80%;
+      margin-top: 20px;
+    }
+    .panel {
+      width: 45%;
+      border: 1px solid #ccc;
+      padding: 10px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    .panel h2 {
+      margin: 0 0 10px 0;
+      text-align: center;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    ul li {
+      padding: 5px 0;
+      border-bottom: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+  <h1>Data Filter Viewer</h1>
+
+  <div class="controls">
     <input type="number" id="filter-seconds" placeholder="Seconds (e.g., 60)" />
     <input type="number" id="filter-rssi" placeholder="Max RSSI (e.g., -70)" />
-    <button id="filter-button">Filter</button>
-    <button id="clear-button">Clear All Records</button>
-
-    <div class="container">
-      <div class="panel" id="filtered-panel">
-        <h2>Filtered Data</h2>
-        <ul id="filtered-data"></ul>
-      </div>
-      <div class="panel" id="all-panel">
-        <h2>All Data</h2>
-        <ul id="all-data"></ul>
-      </div>
+    <div>
+      <button id="filter-button">Filter</button>
+      <button id="clear-button">Clear All Records</button>
     </div>
+    <div>
+      <button id="start-polling">Start Polling</button>
+      <button id="stop-polling">Stop Polling</button>
+    </div>
+  </div>
 
-    <script>
-      const filterButton = document.getElementById("filter-button");
-      const clearButton = document.getElementById("clear-button");
-      const filterSecondsInput = document.getElementById("filter-seconds");
-      const filterRssiInput = document.getElementById("filter-rssi");
-      const filteredDataList = document.getElementById("filtered-data");
-      const allDataList = document.getElementById("all-data");
+  <div class="container">
+    <div class="panel" id="filtered-panel">
+      <h2>Filtered Data</h2>
+      <ul id="filtered-data"></ul>
+    </div>
+    <div class="panel" id="all-panel">
+      <h2>All Data</h2>
+      <ul id="all-data"></ul>
+    </div>
+  </div>
 
-      const fetchData = async (seconds, maxRssi) => {
-        try {
-          const response = await fetch(
-            `/filter-tags?seconds=${seconds}&maxRssi=${maxRssi}`
-          );
-          const data = await response.json();
-          renderData(data.filtered, filteredDataList);
-          renderData(data.all, allDataList);
-        } catch (error) {
-          console.error("Error fetching data:", error);
-        }
-      };
+  <script>
+    let pollingInterval = null;
 
-      const renderData = (data, element) => {
-        element.innerHTML = data
-          .map(
-            (record) =>
-              `<li>TagId: ${record.tagId}, RSSI: ${record.rssi}, Last Packet: ${record.lastPacketAt}</li>`
-          )
-          .join("");
-      };
+    const filterButton = document.getElementById("filter-button");
+    const clearButton = document.getElementById("clear-button");
+    const startPollingButton = document.getElementById("start-polling");
+    const stopPollingButton = document.getElementById("stop-polling");
+    const filterSecondsInput = document.getElementById("filter-seconds");
+    const filterRssiInput = document.getElementById("filter-rssi");
+    const filteredDataList = document.getElementById("filtered-data");
+    const allDataList = document.getElementById("all-data");
 
-      const clearRecords = async () => {
-        try {
-          await fetch("/clear-records", { method: "DELETE" });
-          filteredDataList.innerHTML = "";
-          allDataList.innerHTML = "";
-        } catch (error) {
-          console.error("Error clearing records:", error);
-        }
-      };
+    const fetchData = async (seconds, maxRssi) => {
+      try {
+        const response = await fetch(
+          `/filter-tags?seconds=${seconds}&maxRssi=${maxRssi}`
+        );
+        const data = await response.json();
+        renderData(data.filtered, filteredDataList);
+        renderData(data.all, allDataList);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
 
-      filterButton.addEventListener("click", () => {
-        const seconds = filterSecondsInput.value || 60;
-        const maxRssi = filterRssiInput.value || -100; // Default to a low RSSI limit
+    const renderData = (data, element) => {
+      element.innerHTML = data
+        .map(
+          (record) =>
+            `<li>TagId: ${record.tagId}, RSSI: ${record.rssi}, Last Packet: ${record.lastPacketAt}</li>`
+        )
+        .join("");
+    };
+
+    const clearRecords = async () => {
+      try {
+        await fetch("/clear-records", { method: "DELETE" });
+        filteredDataList.innerHTML = "";
+        allDataList.innerHTML = "";
+      } catch (error) {
+        console.error("Error clearing records:", error);
+      }
+    };
+
+    const startPolling = () => {
+      if (pollingInterval) {
+        alert("Polling is already running!");
+        return;
+      }
+
+      const seconds = filterSecondsInput.value || 60;
+      const maxRssi = filterRssiInput.value || -100; // Default to a low RSSI limit
+
+      pollingInterval = setInterval(() => {
         fetchData(seconds, maxRssi);
-      });
+      }, 5000); // Poll every 5 seconds
 
-      clearButton.addEventListener("click", clearRecords);
+      alert("Polling started!");
+    };
 
-      // Initial fetch to populate data
-      fetchData(60, -100);
-    </script>
-  </body>
+    const stopPolling = () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        alert("Polling stopped!");
+      } else {
+        alert("Polling is not running!");
+      }
+    };
+
+    filterButton.addEventListener("click", () => {
+      const seconds = filterSecondsInput.value || 60;
+      const maxRssi = filterRssiInput.value || -100;
+      fetchData(seconds, maxRssi);
+    });
+
+    clearButton.addEventListener("click", clearRecords);
+    startPollingButton.addEventListener("click", startPolling);
+    stopPollingButton.addEventListener("click", stopPolling);
+
+    // Initial fetch to populate data
+    fetchData(60, -100);
+  </script>
+</body>
 </html>
