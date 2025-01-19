@@ -18,20 +18,20 @@
     }
     .controls {
       display: flex;
-      flex-direction: column;
+      justify-content: center;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
       margin: 20px 0;
     }
     .controls input {
-      margin: 5px;
       padding: 10px;
       font-size: 14px;
       border: 1px solid #ccc;
       border-radius: 4px;
-      width: 200px;
+      width: 180px;
     }
     .controls button {
-      margin: 5px;
       padding: 10px 20px;
       font-size: 14px;
       border: none;
@@ -75,14 +75,10 @@
   <div class="controls">
     <input type="number" id="filter-seconds" placeholder="Seconds (e.g., 60)" />
     <input type="number" id="filter-rssi" placeholder="Max RSSI (e.g., -70)" />
-    <div>
-      <button id="filter-button">Filter</button>
-      <button id="clear-button">Clear All Records</button>
-    </div>
-    <div>
-      <button id="start-polling">Start Polling</button>
-      <button id="stop-polling">Stop Polling</button>
-    </div>
+    <button id="filter-button">Filter</button>
+    <button id="clear-button">Clear All Records</button>
+    <button id="start-polling">Start Polling</button>
+    <button id="stop-polling">Stop Polling</button>
   </div>
 
   <div class="container">
