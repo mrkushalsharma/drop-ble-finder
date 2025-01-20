@@ -24,6 +24,14 @@
       gap: 10px;
       margin: 20px 0;
     }
+     .controls div {
+      margin-bottom: 10px;
+    }
+    .controls label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
     .controls input {
       padding: 10px;
       font-size: 14px;
@@ -72,13 +80,21 @@
 <body>
   <h1>Data Filter Viewer</h1>
 
-  <div class="controls">
-    <input type="number" id="filter-seconds" placeholder="Seconds (e.g., 60)" />
-    <input type="number" id="filter-rssi" placeholder="Max RSSI (e.g., -70)" />
-    <button id="filter-button">Filter</button>
-    <button id="clear-button">Clear All Records</button>
-    <button id="start-polling">Start Polling</button>
-    <button id="stop-polling">Stop Polling</button>
+   <div class="controls">
+    <div>
+      <label for="filter-seconds">Seconds (e.g., 60):</label>
+      <input type="number" id="filter-seconds" placeholder="Seconds (e.g., 60)" />
+    </div>
+    <div>
+      <label for="filter-rssi">Max RSSI (e.g., -70):</label>
+      <input type="number" id="filter-rssi" placeholder="Max RSSI (e.g., -70)" />
+    </div>
+    <div>
+      <button id="filter-button">Filter</button>
+      <button id="clear-button">Clear All Records</button>
+      <button id="start-polling">Start Polling</button>
+      <button id="stop-polling">Stop Polling</button>
+    </div>
   </div>
 
   <div class="container">
@@ -119,10 +135,11 @@
 
     const renderData = (data, element) => {
       element.innerHTML = data
-        .map(
-          (record) =>
-            `<li>TagId: ${record.tagId}, RSSI: ${record.rssi}, Last Packet: ${record.lastPacketAt}</li>`
-        )
+        .map((record) => {
+          // Convert `lastPacketAt` to a local time string
+          const localTime = new Date(record.lastPacketAt).toLocaleString();
+          return `<li>TagId: ${record.tagId}, RSSI: ${record.rssi}, Last Packet: ${localTime}</li>`;
+        })
         .join("");
     };
 
